@@ -172,7 +172,10 @@ def create_object_xodr_links(obj, link_type, cp_type, id_other, id_direct_juncti
             if id_direct_junction != None:
                 obj_other['id_xodr_direct_junction_end'] = id_direct_junction
     elif obj_other.name.startswith('junction'):
-        obj_other['incoming_roads'][cp_type] = obj['id_xodr']
+        if link_type == 'start':
+            obj_other['outgoing_roads'][cp_type] = obj['id_xodr']
+        else:
+            obj_other['incoming_roads'][cp_type] = obj['id_xodr']
 
 def select_activate_object(context, obj):
     '''
@@ -243,7 +246,7 @@ def raycast_mouse_to_object(context, event, filter=None):
     if hit:
         if filter is not None:
             # Return hit only if not filtered out
-            if filter in obj:
+            if filter in obj or True:#dont filter
                 return True, point, obj
             else:
                 return False, point, None
@@ -334,23 +337,28 @@ def mouse_to_object_params(context, event, filter):
     if dsc_hit:
         # DSC mesh hit
         if filter == 'OpenDRIVE':
-            if obj['dsc_category'] == 'OpenDRIVE':
-                if obj['dsc_type'] == 'road':
-                    hit = True
-                    point_type, snapped_point, heading, curvature, slope = point_to_road_connector(obj, point_raycast)
-                    id_obj = obj['id_xodr']
-                    if obj['road_split_type'] == 'end':
-                        if point_type == 'cp_end_l' or point_type == 'cp_end_r':
-                            if 'id_xodr_direct_junction_end' in obj:
-                                id_direct_junction = obj['id_xodr_direct_junction_end']
-                    if obj['road_split_type'] == 'start':
-                        if point_type == 'cp_start_l' or point_type == 'cp_start_r':
-                            if 'id_xodr_direct_junction_start' in obj:
-                                id_direct_junction = obj['id_xodr_direct_junction_start']
-                if obj['dsc_type'] == 'junction':
-                    hit = True
-                    point_type, snapped_point, heading = point_to_junction_connector(obj, point_raycast)
-                    id_obj = obj['id_xodr']
+            if 'dsc_category' in obj:
+                if obj['dsc_category'] == 'OpenDRIVE':
+                    if obj['dsc_type'] == 'road':
+                        hit = True
+                        point_type, snapped_point, heading, curvature, slope = point_to_road_connector(obj, point_raycast)
+                        id_obj = obj['id_xodr']
+                        if obj['road_split_type'] == 'end':
+                            if point_type == 'cp_end_l' or point_type == 'cp_end_r':
+                                if 'id_xodr_direct_junction_end' in obj:
+                                    id_direct_junction = obj['id_xodr_direct_junction_end']
+                        if obj['road_split_type'] == 'start':
+                            if point_type == 'cp_start_l' or point_type == 'cp_start_r':
+                                if 'id_xodr_direct_junction_start' in obj:
+                                    id_direct_junction = obj['id_xodr_direct_junction_start']
+                    if obj['dsc_type'] == 'junction':
+                        hit = True
+                        point_type, snapped_point, heading = point_to_junction_connector(obj, point_raycast)
+                        id_obj = obj['id_xodr']
+            else:
+                hit = True
+                id_obj = obj.name
+                snapped_point = point_raycast + Vector((0,0,0.05))
         elif filter == 'OpenSCENARIO':
             if obj['dsc_category'] == 'OpenSCENARIO':
                 hit = True

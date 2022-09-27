@@ -368,54 +368,63 @@ class DSC_OT_export(bpy.types.Operator):
         num_junctions = 0
         if helpers.collection_exists(['OpenDRIVE']):
             for obj in bpy.data.collections['OpenDRIVE'].objects:
-                if obj.name.startswith('junction'):
+                if obj.name.startswith('junction') or obj.name.startswith('oneway_junction'):
                     incoming_roads = []
-                    angles = []
+                    outgoing_roads = []
+                    angles_in = []
+                    angles_out = []
                     junction_id = obj['id_xodr']
                     # Create junction roads based on incoming road angles (simple 4-way for now)
                     # 0 angle road must point in 'right' direction
                     for idx,cp in enumerate(['cp_right','cp_up','cp_left','cp_down']):
                         if cp in obj['incoming_roads']:
                             inc_road = xodr.get_road_by_id(roads, obj['incoming_roads'][cp])
-                            if(inc_road != None):
+                            if(inc_road is not  None):
                                 incoming_roads.append(inc_road)
-                                angles.append(idx * pi / 2)
-                        else:
-                            self.report({'WARNING'}, 'Junction with ID {} is missing a connection.'.format(obj['id_xodr']))
+                                angles_in.append(idx * pi / 2)
+                        if cp in obj['outgoing_roads']:
+                            out_road = xodr.get_road_by_id(roads, obj['outgoing_roads'][cp])
+                            if(out_road is not None):
+                                outgoing_roads.append(out_road)
+                                angles_out.append(idx * pi / 2)
                     # Create connecting roads and link them to incoming roads
-                    junction_roads = xodr.create_junction_roads_standalone(angles, 3.75, junction_id,
-                        spiral_part=0.01, arc_part=0.99, startnum=1000+6*num_junctions, lane_width=3.75)
+                    print("ANGLES",angles_in,angles_out)
+                    junction_roads = xodr.create_junction_roads_standalone(angles_in,angles_out, 3.75, junction_id,
+                        spiral_part=0.01, arc_part=0.99, startnum=1000+12*num_junctions,right_lanes = 1, left_lanes = 0, lane_width=3.75)
                     self.add_junction_roads_elevation(junction_roads, obj['elevation_level'])
                     i = 0
-                    for j in range(len(incoming_roads) - 1):
-                        for k in range(j + 1, len(incoming_roads)):
-                            # FIXME this will create problems when a single road is
-                            # connected to a junction twice
-                            if incoming_roads[j].predecessor:
-                                if incoming_roads[j].predecessor.element_id == junction_id:
-                                    cp_type_j = xodr.ContactPoint.start
-                            if incoming_roads[j].successor:
-                                if incoming_roads[j].successor.element_id == junction_id:
-                                    cp_type_j = xodr.ContactPoint.end
-                            if incoming_roads[k].predecessor:
-                                if incoming_roads[k].predecessor.element_id == junction_id:
-                                    cp_type_k = xodr.ContactPoint.start
-                            if incoming_roads[k].successor:
-                                if incoming_roads[k].successor.element_id == junction_id:
-                                    cp_type_k = xodr.ContactPoint.end
-                            # Link incoming with connecting road
-                            junction_roads[i].add_predecessor(
-                                xodr.ElementType.road, incoming_roads[j].id, cp_type_j)
-                            # FIXME is redundant lane linking needed?
-                            xodr.create_lane_links(junction_roads[i], incoming_roads[j])
-                            junction_roads[i].add_successor(
-                                xodr.ElementType.road, incoming_roads[k].id, cp_type_k)
-                            # FIXME is redundant lane linking needed?
-                            xodr.create_lane_links(junction_roads[i], incoming_roads[k])
-                            i += 1
+                    print("incoming",incoming_roads)
+                    print("outgoing",outgoing_roads)
+                    print("junction", junction_roads)
+                    for j, inc_road in enumerate(incoming_roads):
+                        for k, out_road in enumerate(outgoing_roads):
+                            if(angles_in[j] != angles_out[k]):
+                                if inc_road.predecessor:
+                                    if inc_road.predecessor.element_id == junction_id:
+                                        cp_type_j = xodr.ContactPoint.start
+                                if inc_road.successor:
+                                    if inc_road.successor.element_id == junction_id:
+                                        cp_type_j = xodr.ContactPoint.end
+                                if out_road.predecessor:
+                                    if out_road.predecessor.element_id == junction_id:
+                                        cp_type_k = xodr.ContactPoint.start
+                                if out_road.successor:
+                                    if out_road.successor.element_id == junction_id:
+                                        cp_type_k = xodr.ContactPoint.end
+                                # Link incoming with connecting road
+                                junction_roads[i].add_predecessor(
+                                    xodr.ElementType.road, inc_road.id, cp_type_j)
+                                # FIXME is redundant lane linking needed?
+                                xodr.create_lane_links(junction_roads[i], inc_road)
+
+                                junction_roads[i].add_successor(
+                                    xodr.ElementType.road, out_road.id, cp_type_k)
+                                # FIXME is redundant lane linking needed?
+                                xodr.create_lane_links(junction_roads[i], out_road)
+                                i += 1
                     # Finally create the junction
                     junction = xodr.create_junction(
-                        junction_roads, junction_id, incoming_roads, 'junction_' + str(junction_id))
+                        junction_roads, junction_id, incoming_roads + outgoing_roads, 'junction_' + str(junction_id))
                     num_junctions += 1
                     print('Add junction with ID', junction_id)
                     odr.add_junction(junction)
